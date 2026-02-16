@@ -13,7 +13,7 @@
             <p>원하는 지역의 도시계획 또는 군계획 조례를 검색합니다.</p>
         </header>
         <main>
-            <div class="search-form">
+            <form id="search-form" action="https://www.law.go.kr/search/search.do" method="get" target="_blank">
                 <div class="form-group">
                     <label for="province">광역자치단체</label>
                     <select id="province">
@@ -30,8 +30,14 @@
                     <label for="keyword">검색어</label>
                     <input type="text" id="keyword" placeholder="예: 발전시설">
                 </div>
-                <a href="#" id="search-button" class="search-button" target="_blank">검색</a>
-            </div>
+                
+                <!-- Hidden inputs for form submission -->
+                <input type="hidden" name="query" id="query-input">
+                <input type="hidden" name="collection" value="ordin">
+
+                <button type="submit" id="search-button">검색</button>
+            </form>
+            
             <div id="results-container" class="results-container" style="display: none;">
                 <h2>검색 결과</h2>
                 <ul id="results-list"></ul>

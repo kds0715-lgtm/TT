@@ -22,8 +22,9 @@ const administrativeDistricts = {
 document.addEventListener('DOMContentLoaded', () => {
     const provinceSelect = document.getElementById('province');
     const citySelect = document.getElementById('city');
+    const searchForm = document.getElementById('search-form');
     const keywordInput = document.getElementById('keyword');
-    const searchButton = document.getElementById('search-button');
+    const queryInput = document.getElementById('query-input');
 
     // Populate province dropdown
     for (const province in administrativeDistricts) {
@@ -48,14 +49,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // This function updates the search button's href attribute.
-    function updateSearchUrl() {
+    // Handle form submission
+    searchForm.addEventListener('submit', (event) => {
         const province = provinceSelect.value;
         const city = citySelect.value;
         const keyword = keywordInput.value.trim();
 
         if (!province || !city) {
-            searchButton.href = '#'; // Reset if selection is incomplete
+            event.preventDefault(); // Stop form submission
+            alert('광역자치단체와 기초자치단체를 모두 선택해주세요.');
             return;
         }
 
@@ -72,25 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
             query += ` ${keyword}`;
         }
 
-        const encodedQuery = encodeURIComponent(query);
-        const searchUrl = `https://www.law.go.kr/search/search.do?query=${encodedQuery}&collection=ordin`;
-
-        searchButton.href = searchUrl;
-    }
-
-    // Add event listeners to update the URL whenever the user changes the inputs.
-    provinceSelect.addEventListener('change', updateSearchUrl);
-    citySelect.addEventListener('change', updateSearchUrl);
-    keywordInput.addEventListener('input', updateSearchUrl);
-
-    // Initial update in case the browser has pre-filled values.
-    updateSearchUrl();
-
-    // Handle search button click to provide feedback if needed.
-    searchButton.addEventListener('click', (event) => {
-        if (searchButton.href === '#') {
-            event.preventDefault(); // Prevent navigation if URL is not set.
-            alert('광역자치단체와 기초자치단체를 모두 선택해주세요.');
-        }
+        // Set the final query to the hidden input field before submitting
+        queryInput.value = query;
     });
 });
