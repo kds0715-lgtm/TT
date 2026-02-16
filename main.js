@@ -48,14 +48,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Handle search button click
-    searchButton.addEventListener('click', () => {
+    // This function updates the search button's href attribute.
+    function updateSearchUrl() {
         const province = provinceSelect.value;
         const city = citySelect.value;
         const keyword = keywordInput.value.trim();
 
         if (!province || !city) {
-            alert('광역자치단체와 기초자치단체를 모두 선택해주세요.');
+            searchButton.href = '#'; // Reset if selection is incomplete
             return;
         }
 
@@ -73,9 +73,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const encodedQuery = encodeURIComponent(query);
-        // 법령정보센터의 통합 검색 URL을 사용하여 조례(ordin) 컬렉션에서 검색합니다.
         const searchUrl = `https://www.law.go.kr/search/search.do?query=${encodedQuery}&collection=ordin`;
 
-        window.open(searchUrl, '_blank');
+        searchButton.href = searchUrl;
+    }
+
+    // Add event listeners to update the URL whenever the user changes the inputs.
+    provinceSelect.addEventListener('change', updateSearchUrl);
+    citySelect.addEventListener('change', updateSearchUrl);
+    keywordInput.addEventListener('input', updateSearchUrl);
+
+    // Initial update in case the browser has pre-filled values.
+    updateSearchUrl();
+
+    // Handle search button click to provide feedback if needed.
+    searchButton.addEventListener('click', (event) => {
+        if (searchButton.href === '#') {
+            event.preventDefault(); // Prevent navigation if URL is not set.
+            alert('광역자치단체와 기초자치단체를 모두 선택해주세요.');
+        }
     });
 });
