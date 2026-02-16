@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const provinceSelect = document.getElementById('province');
     const citySelect = document.getElementById('city');
     const keywordInput = document.getElementById('keyword');
-    const apiKeyInput = document.getElementById('api-key');
     const searchButton = document.getElementById('search-button');
 
     // Populate province dropdown
@@ -54,64 +53,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const province = provinceSelect.value;
         const city = citySelect.value;
         const keyword = keywordInput.value.trim();
-        const apiKey = apiKeyInput.value.trim();
 
         if (!province || !city) {
             alert('광역자치단체와 기초자치단체를 모두 선택해주세요.');
             return;
         }
 
-        if (!apiKey) {
-            alert('법령정보센터 오픈 API 키를 입력해주세요.');
-            return;
-        }
-
-        searchAndRedirect({ province, city, keyword, apiKey });
-    });
-
-    async function searchAndRedirect(query) {
-        const { province, city, keyword, apiKey } = query;
-
-        let ordinanceKeyword = '도시계획';
+        let ordinanceType = '도시계획 조례';
         if (city.endsWith('군') && city !== '군위군') {
-            ordinanceKeyword = '군계획';
+            ordinanceType = '군계획 조례';
         }
 
         const fullAreaName = (province === city || city === '세종특별자치시') ? province : `${province} ${city}`;
         const searchArea = (province === '제주특별자치도') ? city : fullAreaName;
-        
-        // API는 조례 이름으로만 검색하는 것이 더 정확할 수 있습니다.
-        let searchQuery = `${searchArea} ${ordinanceKeyword}`;
-        
-        const encodedQuery = encodeURIComponent(searchQuery);
-        // API는 1개만 요청하여 가장 정확한 결과를 찾습니다.
-        const url = `https://www.law.go.kr/DRF/lawSearch.do?OC=${apiKey}&target=ordin&type=JSON&query=${encodedQuery}&display=1&page=1`;
 
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            
-            if (data.totalCnt === 0 || !data.law) {
-                alert('정확한 조례를 찾을 수 없습니다. 지역명을 확인하거나, API가 해당 조례를 제공하지 않을 수 있습니다.');
-            } else {
-                const firstResult = data.law[0];
-                const ordinSeq = firstResult.ordinSeq;
-                
-                let redirectUrl = `https://www.law.go.kr/LSW/ordinInfoP.do?ordinSeq=${ordinSeq}`;
-                
-                // 사용자가 입력한 검색어가 있다면, 본문 검색 파라미터(vSct)를 추가합니다.
-                if (keyword) {
-                    redirectUrl += `&vSct=${encodeURIComponent(keyword)}`;
-                }
-                
-                window.open(redirectUrl, '_blank');
-            }
-        } catch (error) {
-            console.error('Error fetching ordinances:', error);
-            alert('조례 정보를 가져오는 데 실패했습니다. API 키 또는 네트워크 연결을 확인하세요.');
+        let query = `${searchArea} ${ordinanceType}`;
+        if (keyword) {
+            query += ` ${keyword}`;
         }
-    }
+
+        const encodedQuery = encodeURIComponent(query);
+        // 법령정보센터의 통합 검색 URL을 사용하여 조례(ordin) 컬렉션에서 검색합니다.
+        const searchUrl = `https://www.law.go.kr/search/search.do?query=${encodedQuery}&collection=ordin`;
+
+        window.open(searchUrl, '_blank');
+    });
 });
