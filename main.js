@@ -25,13 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const keywordInput = document.getElementById('keyword');
     const apiKeyInput = document.getElementById('api-key');
     const searchButton = document.getElementById('search-button');
-    const resultsContainer = document.getElementById('results-container');
-    const resultsList = document.getElementById('results-list');
-    const paginationContainer = document.getElementById('pagination');
-
-    let currentPage = 1;
-    const resultsPerPage = 10;
-    let currentQuery = {};
 
     // Populate province dropdown
     for (const province in administrativeDistricts) {
@@ -73,31 +66,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        currentQuery = { province, city, keyword, apiKey };
-        currentPage = 1;
-        searchOrdinances(currentQuery, currentPage);
+        searchAndRedirect({ province, city, keyword, apiKey });
     });
 
-    async function searchOrdinances(query, page) {
+    async function searchAndRedirect(query) {
         const { province, city, keyword, apiKey } = query;
 
         let ordinanceKeyword = '도시계획';
         if (city.endsWith('군') && city !== '군위군') {
             ordinanceKeyword = '군계획';
-        } else if (city === '세종특별자치시') {
-            ordinanceKeyword = '도시계획';
         }
 
         const fullAreaName = (province === city || city === '세종특별자치시') ? province : `${province} ${city}`;
         const searchArea = (province === '제주특별자치도') ? city : fullAreaName;
-
+        
+        // API는 조례 이름으로만 검색하는 것이 더 정확할 수 있습니다.
         let searchQuery = `${searchArea} ${ordinanceKeyword}`;
-        if (keyword) {
-            searchQuery += ` ${keyword}`;
-        }
         
         const encodedQuery = encodeURIComponent(searchQuery);
-        const url = `https://www.law.go.kr/DRF/lawSearch.do?OC=${apiKey}&target=ordin&type=JSON&query=${encodedQuery}&display=${resultsPerPage}&page=${page}`;
+        // API는 1개만 요청하여 가장 정확한 결과를 찾습니다.
+        const url = `https://www.law.go.kr/DRF/lawSearch.do?OC=${apiKey}&target=ordin&type=JSON&query=${encodedQuery}&display=1&page=1`;
 
         try {
             const response = await fetch(url);
@@ -107,71 +95,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (data.totalCnt === 0 || !data.law) {
-                displayNoResults();
+                alert('정확한 조례를 찾을 수 없습니다. 지역명을 확인하거나, API가 해당 조례를 제공하지 않을 수 있습니다.');
             } else {
-                displayResults(data.law, data.totalCnt);
-                displayPagination(data.totalCnt, page);
+                const firstResult = data.law[0];
+                const ordinSeq = firstResult.ordinSeq;
+                
+                let redirectUrl = `https://www.law.go.kr/LSW/ordinInfoP.do?ordinSeq=${ordinSeq}`;
+                
+                // 사용자가 입력한 검색어가 있다면, 본문 검색 파라미터(vSct)를 추가합니다.
+                if (keyword) {
+                    redirectUrl += `&vSct=${encodeURIComponent(keyword)}`;
+                }
+                
+                window.open(redirectUrl, '_blank');
             }
         } catch (error) {
             console.error('Error fetching ordinances:', error);
             alert('조례 정보를 가져오는 데 실패했습니다. API 키 또는 네트워크 연결을 확인하세요.');
-            resultsContainer.style.display = 'none';
         }
-    }
-
-    function displayResults(laws, totalCount) {
-        resultsList.innerHTML = '';
-        resultsContainer.style.display = 'block';
-        
-        resultsList.innerHTML = `<li><strong>총 ${totalCount}개의 결과를 찾았습니다.</strong></li><hr>`;
-
-        laws.forEach(law => {
-            const listItem = document.createElement('li');
-            listItem.innerHTML = `
-                <a href="https://www.law.go.kr/LSW/ordinInfoP.do?ordinSeq=${law.ordinSeq}" target="_blank">${law.자칙법규명}</a>
-                <p>공포일자: ${law.공포일자} | 시행일자: ${law.시행일자 || '미정'}</p>
-                <p>소관부처: ${law.소관부처명}</p>
-            `;
-            resultsList.appendChild(listItem);
-        });
-    }
-
-    function displayNoResults() {
-        resultsList.innerHTML = '<li>검색 결과가 없습니다.</li>';
-        paginationContainer.innerHTML = '';
-        resultsContainer.style.display = 'block';
-    }
-
-    function displayPagination(totalCount, currentPage) {
-        paginationContainer.innerHTML = '';
-        const totalPages = Math.ceil(totalCount / resultsPerPage);
-
-        if (totalPages <= 1) return;
-
-        if (currentPage > 1) {
-            const prevButton = createPaginationButton('이전', currentPage - 1);
-            paginationContainer.appendChild(prevButton);
-        }
-
-        const pageInfo = document.createElement('span');
-        pageInfo.textContent = ` ${currentPage} / ${totalPages} `;
-        pageInfo.style.margin = "0 10px";
-        paginationContainer.appendChild(pageInfo);
-
-
-        if (currentPage < totalPages) {
-            const nextButton = createPaginationButton('다음', currentPage + 1);
-            paginationContainer.appendChild(nextButton);
-        }
-    }
-
-    function createPaginationButton(text, page) {
-        const button = document.createElement('button');
-        button.textContent = text;
-        button.addEventListener('click', () => {
-            currentPage = page;
-            searchOrdinances(currentQuery, currentPage);
-        });
-        return button;
     }
 });
