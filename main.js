@@ -81,17 +81,17 @@ document.addEventListener('DOMContentLoaded', () => {
     async function searchOrdinances(query, page) {
         const { province, city, keyword, apiKey } = query;
 
-        let ordinanceType = '도시계획 조례';
+        let ordinanceKeyword = '도시계획';
         if (city.endsWith('군') && city !== '군위군') {
-            ordinanceType = '군계획 조례';
+            ordinanceKeyword = '군계획';
         } else if (city === '세종특별자치시') {
-            ordinanceType = '도시계획 조례';
+            ordinanceKeyword = '도시계획';
         }
-        
+
         const fullAreaName = (province === city || city === '세종특별자치시') ? province : `${province} ${city}`;
         const searchArea = (province === '제주특별자치도') ? city : fullAreaName;
 
-        let searchQuery = `${searchArea} ${ordinanceType}`;
+        let searchQuery = `${searchArea} ${ordinanceKeyword}`;
         if (keyword) {
             searchQuery += ` ${keyword}`;
         }
@@ -148,7 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (totalPages <= 1) return;
 
-        // Simplified pagination: Previous and Next buttons
         if (currentPage > 1) {
             const prevButton = createPaginationButton('이전', currentPage - 1);
             paginationContainer.appendChild(prevButton);
