@@ -99,16 +99,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function processMunicipality(municipality, keyword) {
-        let query;
-        if (municipality === '세종특별자치시') {
-            query = '세종특별자치시 도시군계획 조례';
-        } else {
-            const ordinanceType = municipality.endsWith('군') && municipality !== '군위군' ? '군계획 조례' : '도시계획 조례';
-            query = `${municipality} ${ordinanceType}`;
-        }
+        const ordinanceType = municipality.endsWith('군') && municipality !== '군위군' ? '군계획 조례' : '도시계획 조례';
         
-        const mst = await getOrdinanceId(query);
-        if (!mst) return [];
+        // 1. Primary search with core keywords (e.g., "원주시 도시계획 조례")
+        let query = `${municipality} ${ordinanceType}`;
+        let mst = await getOrdinanceId(query);
+
+        // 2. Fallback search if primary fails (e.g., for "세종특별자치시")
+        if (!mst) {
+            const fallbackQuery = `${municipality} 도시군계획 조례`;
+            mst = await getOrdinanceId(fallbackQuery);
+        }
+
+        if (!mst) {
+            console.log(`Could not find an ordinance for: ${municipality}`);
+            return [];
+        }
+
+        // 3. Fetch and filter content with the found ID
         return await findArticlesInOrdinance(mst, keyword, municipality);
     }
 
