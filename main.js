@@ -1,3 +1,4 @@
+
 const administrativeDistricts = {
     '서울특별시': ['종로구', '중구', '용산구', '성동구', '광진구', '동대문구', '중랑구', '성북구', '강북구', '도봉구', '노원구', '은평구', '서대문구', '마포구', '양천구', '강서구', '구로구', '금천구', '영등포구', '동작구', '관악구', '서초구', '강남구', '송파구', '강동구'],
     '부산광역시': ['중구', '서구', '동구', '영도구', '부산진구', '동래구', '남구', '북구', '해운대구', '사하구', '금정구', '강서구', '연제구', '수영구', '사상구', '기장군'],
@@ -22,7 +23,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const provinceSelect = document.getElementById('province');
     const citySelect = document.getElementById('city');
     const keywordInput = document.getElementById('keyword');
+    const apiKeyInput = document.getElementById('api-key');
     const searchButton = document.getElementById('search-button');
+    const resultsContainer = document.getElementById('results-container');
+    const resultsList = document.getElementById('results-list');
+    const paginationContainer = document.getElementById('pagination');
+
+    let currentPage = 1;
+    const resultsPerPage = 10;
+    let currentQuery = {};
 
     // Populate province dropdown
     for (const province in administrativeDistricts) {
@@ -52,34 +61,118 @@ document.addEventListener('DOMContentLoaded', () => {
         const province = provinceSelect.value;
         const city = citySelect.value;
         const keyword = keywordInput.value.trim();
+        const apiKey = apiKeyInput.value.trim();
 
         if (!province || !city) {
             alert('광역자치단체와 기초자치단체를 모두 선택해주세요.');
             return;
         }
 
-        // Determine ordinance type
+        if (!apiKey) {
+            alert('법령정보센터 오픈 API 키를 입력해주세요.');
+            return;
+        }
+
+        currentQuery = { province, city, keyword, apiKey };
+        currentPage = 1;
+        searchOrdinances(currentQuery, currentPage);
+    });
+
+    async function searchOrdinances(query, page) {
+        const { province, city, keyword, apiKey } = query;
+
         let ordinanceType = '도시계획 조례';
-        if (city.endsWith('군') && city !== '군위군') { // 군위군은 대구광역시 소속이지만 조례는 군계획 조례일 수 있음
-             ordinanceType = '군계획 조례';
+        if (city.endsWith('군') && city !== '군위군') {
+            ordinanceType = '군계획 조례';
         } else if (city === '세종특별자치시') {
             ordinanceType = '도시계획 조례';
         }
-
-        const fullAreaName = (province === city || city === '세종특별자치시') ? province : `${province} ${city}`;
         
-        // Special case for Jeju
+        const fullAreaName = (province === city || city === '세종특별자치시') ? province : `${province} ${city}`;
         const searchArea = (province === '제주특별자치도') ? city : fullAreaName;
 
-
-        let query = `${searchArea} ${ordinanceType}`;
+        let searchQuery = `${searchArea} ${ordinanceType}`;
         if (keyword) {
-            query += ` ${keyword}`;
+            searchQuery += ` ${keyword}`;
+        }
+        
+        const encodedQuery = encodeURIComponent(searchQuery);
+        const url = `https://www.law.go.kr/DRF/lawSearch.do?OC=${apiKey}&target=ordin&type=JSON&query=${encodedQuery}&display=${resultsPerPage}&page=${page}`;
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            
+            if (data.totalCnt === 0 || !data.law) {
+                displayNoResults();
+            } else {
+                displayResults(data.law, data.totalCnt);
+                displayPagination(data.totalCnt, page);
+            }
+        } catch (error) {
+            console.error('Error fetching ordinances:', error);
+            alert('조례 정보를 가져오는 데 실패했습니다. API 키 또는 네트워크 연결을 확인하세요.');
+            resultsContainer.style.display = 'none';
+        }
+    }
+
+    function displayResults(laws, totalCount) {
+        resultsList.innerHTML = '';
+        resultsContainer.style.display = 'block';
+        
+        resultsList.innerHTML = `<li><strong>총 ${totalCount}개의 결과를 찾았습니다.</strong></li><hr>`;
+
+        laws.forEach(law => {
+            const listItem = document.createElement('li');
+            listItem.innerHTML = `
+                <a href="https://www.law.go.kr/LSW/ordinInfoP.do?ordinSeq=${law.ordinSeq}" target="_blank">${law.자칙법규명}</a>
+                <p>공포일자: ${law.공포일자} | 시행일자: ${law.시행일자 || '미정'}</p>
+                <p>소관부처: ${law.소관부처명}</p>
+            `;
+            resultsList.appendChild(listItem);
+        });
+    }
+
+    function displayNoResults() {
+        resultsList.innerHTML = '<li>검색 결과가 없습니다.</li>';
+        paginationContainer.innerHTML = '';
+        resultsContainer.style.display = 'block';
+    }
+
+    function displayPagination(totalCount, currentPage) {
+        paginationContainer.innerHTML = '';
+        const totalPages = Math.ceil(totalCount / resultsPerPage);
+
+        if (totalPages <= 1) return;
+
+        // Simplified pagination: Previous and Next buttons
+        if (currentPage > 1) {
+            const prevButton = createPaginationButton('이전', currentPage - 1);
+            paginationContainer.appendChild(prevButton);
         }
 
-        const encodedQuery = encodeURIComponent(query);
-        const searchUrl = `https://www.elis.go.kr/search/pda/search.do?searchMode=2&query=${encodedQuery}`;
+        const pageInfo = document.createElement('span');
+        pageInfo.textContent = ` ${currentPage} / ${totalPages} `;
+        pageInfo.style.margin = "0 10px";
+        paginationContainer.appendChild(pageInfo);
 
-        window.open(searchUrl, '_blank');
-    });
+
+        if (currentPage < totalPages) {
+            const nextButton = createPaginationButton('다음', currentPage + 1);
+            paginationContainer.appendChild(nextButton);
+        }
+    }
+
+    function createPaginationButton(text, page) {
+        const button = document.createElement('button');
+        button.textContent = text;
+        button.addEventListener('click', () => {
+            currentPage = page;
+            searchOrdinances(currentQuery, currentPage);
+        });
+        return button;
+    }
 });

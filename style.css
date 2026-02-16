@@ -50,16 +50,17 @@ header p {
     color: #444;
 }
 
-select, input[type="text"] {
+select, input[type="text"], input[type="password"] {
     width: 100%;
     padding: 12px;
     border: 1px solid #ccc;
     border-radius: 8px;
     font-size: 1rem;
+    box-sizing: border-box;
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 
-select:focus, input[type="text"]:focus {
+select:focus, input[type="text"]:focus, input[type="password"]:focus {
     border-color: #0056b3;
     box-shadow: 0 0 8px rgba(0, 86, 179, 0.2);
     outline: none;
@@ -80,6 +81,72 @@ select:focus, input[type="text"]:focus {
 #search-button:hover {
     background-color: #004494;
     transform: translateY(-2px);
+}
+
+.results-container {
+    margin-top: 30px;
+    text-align: left;
+}
+
+.results-container h2 {
+    color: #0056b3;
+    border-bottom: 2px solid #0056b3;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+#results-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+#results-list li {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    transition: background-color 0.3s;
+}
+
+#results-list li:hover {
+    background-color: #f0f0f0;
+}
+
+#results-list a {
+    text-decoration: none;
+    color: #0056b3;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+#results-list p {
+    margin: 5px 0 0;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+#pagination {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+#pagination button {
+    padding: 8px 12px;
+    border: 1px solid #0056b3;
+    border-radius: 5px;
+    background-color: #fff;
+    color: #0056b3;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+#pagination button:hover, #pagination button.active {
+    background-color: #0056b3;
+    color: #fff;
 }
 
 @media (max-width: 768px) {
