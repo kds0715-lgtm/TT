@@ -19,20 +19,16 @@ const administrativeDistricts = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    const API_KEY = 'kds07153202';
+
     const provinceSelect = document.getElementById('province');
     const citySelect = document.getElementById('city');
     const keywordInput = document.getElementById('keyword');
-    const apiKeyInput = document.getElementById('api-key');
     const searchButton = document.getElementById('search-button');
     const resultsContainer = document.getElementById('results-container');
     const resultsList = document.getElementById('results-list');
     const paginationContainer = document.getElementById('pagination');
 
-    let currentPage = 1;
-    let totalPages = 0;
-    let currentQuery = '';
-
-    // Populate province dropdown
     for (const province in administrativeDistricts) {
         const option = document.createElement('option');
         option.value = province;
@@ -40,11 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
         provinceSelect.appendChild(option);
     }
 
-    // Handle province change
     provinceSelect.addEventListener('change', () => {
         const selectedProvince = provinceSelect.value;
         citySelect.innerHTML = '<option value="">전체</option>';
-
         if (selectedProvince && administrativeDistricts[selectedProvince]) {
             administrativeDistricts[selectedProvince].forEach(city => {
                 const option = document.createElement('option');
@@ -55,164 +49,165 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    async function fetchOrdinances(query, page = 1) {
-        const apiKey = apiKeyInput.value;
-        if (!apiKey) {
-            alert('API 키를 입력하세요.');
-            return null;
-        }
-
-        const url = `https://www.law.go.kr/DRF/lawSearch.do?OC=${apiKey}&target=ordin&type=XML&query=${encodeURIComponent(query)}&display=10&page=${page}`;
-        
+    async function getOrdinanceId(municipalityQuery) {
+        const url = `https://www.law.go.kr/DRF/lawSearch.do?OC=${API_KEY}&target=ordin&query=${encodeURIComponent(municipalityQuery)}&type=XML&display=1`;
         try {
             const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            if (!response.ok) return null;
             const xmlText = await response.text();
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-            return xmlDoc;
+            const mst = xmlDoc.querySelector('조례일련번호')?.textContent;
+            return mst;
         } catch (error) {
-            console.error('Error fetching data:', error);
-            alert('데이터를 불러오는 데 실패했습니다. API 키나 네트워크 연결을 확인하세요.');
+            console.error(`Error fetching ID for ${municipalityQuery}:`, error);
             return null;
         }
     }
 
-    function displayResults(items) {
+    async function findArticlesInOrdinance(mst, keyword, municipalityName) {
+        if (!mst) return [];
+        const url = `https://www.law.go.kr/DRF/lawService.do?OC=${API_KEY}&target=ordin&MST=${mst}&type=XML`;
+        try {
+            const response = await fetch(url);
+            if (!response.ok) return [];
+            const xmlText = await response.text();
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+
+            const ordinanceTitle = xmlDoc.querySelector('기본정보 > 자체법규명')?.textContent || '제목 없음';
+            const articles = Array.from(xmlDoc.querySelectorAll('조문'));
+            const matchingArticles = [];
+
+            for (const article of articles) {
+                const articleContent = article.querySelector('조문내용')?.textContent || '';
+                if (articleContent.includes(keyword)) {
+                    const articleTitle = article.querySelector('조문제목')?.textContent || '제목 없음';
+                    matchingArticles.push({
+                        municipality: municipalityName,
+                        ordinanceTitle: ordinanceTitle,
+                        articleTitle: articleTitle,
+                        articleContent: articleContent,
+                    });
+                }
+            }
+            return matchingArticles;
+        } catch (error) {
+            console.error(`Error fetching content for MST ${mst}:`, error);
+            return [];
+        }
+    }
+
+    async function processMunicipality(municipality, keyword) {
+        let query;
+        if (municipality === '세종특별자치시') {
+            query = '세종특별자치시 도시군계획 조례';
+        } else {
+            const ordinanceType = municipality.endsWith('군') && municipality !== '군위군' ? '군계획 조례' : '도시계획 조례';
+            query = `${municipality} ${ordinanceType}`;
+        }
+        
+        const mst = await getOrdinanceId(query);
+        if (!mst) return [];
+        return await findArticlesInOrdinance(mst, keyword, municipality);
+    }
+
+    function displayResults(articles, keyword) {
         resultsList.innerHTML = '';
-        if (items.length === 0) {
-            resultsList.innerHTML = '<li>검색 결과가 없습니다.</li>';
+        paginationContainer.innerHTML = '';
+
+        if (articles.length === 0) {
+            resultsList.innerHTML = '<li>검색된 조문이 없습니다.</li>';
             return;
         }
 
-        items.forEach(item => {
-            const li = document.createElement('li');
-            const title = item.querySelector('조례명')?.textContent || '제목 없음';
-            const link = item.querySelector('조례상세링크')?.textContent;
-            const promulgationDate = item.querySelector('공포일자')?.textContent;
-            const promulgationNum = item.querySelector('공포번호')?.textContent;
+        resultsContainer.querySelector('h2').textContent = `'${keyword}'에 대한 검색 결과: ${articles.length}개 조문`;
 
-            li.innerHTML = `
-                <a href="https://www.law.go.kr${link}" target="_blank">${title}</a>
-                <p>공포번호: ${promulgationNum} | 공포일자: ${promulgationDate}</p>
-            `;
-            resultsList.appendChild(li);
-        });
-    }
+        articles.forEach(article => {
+            const item = document.createElement('div');
+            item.className = 'accordion-item';
 
-    function setupPagination(totalCount) {
-        paginationContainer.innerHTML = '';
-        totalPages = Math.ceil(totalCount / 10);
-
-        if (totalPages <= 1) return;
-
-        for (let i = 1; i <= totalPages; i++) {
             const button = document.createElement('button');
-            button.textContent = i;
-            if (i === currentPage) {
-                button.classList.add('active');
-            }
+            button.className = 'accordion-button';
+            button.innerHTML = `
+                <span class="accordion-title-area">
+                    <span class="municipality-badge">${article.municipality}</span>
+                    ${article.ordinanceTitle}
+                </span>
+                <span class="accordion-icon"></span>
+            `;
+
+            const panel = document.createElement('div');
+            panel.className = 'accordion-panel';
+
+            const panelContent = document.createElement('div');
+            panelContent.className = 'accordion-panel-content';
+            const highlightedContent = article.articleContent.replace(new RegExp(keyword, 'g'), `<mark>${keyword}</mark>`);
+            panelContent.innerHTML = `
+                <p class="article-title">${article.articleTitle}</p>
+                <pre class="article-content">${highlightedContent}</pre>
+            `;
+
+            panel.appendChild(panelContent);
+            item.appendChild(button);
+            item.appendChild(panel);
+            resultsList.appendChild(item);
+
             button.addEventListener('click', () => {
-                currentPage = i;
-                performSearch(currentQuery, currentPage);
+                button.classList.toggle('active');
+                const panel = button.nextElementSibling;
+                if (panel.style.maxHeight) {
+                    panel.style.maxHeight = null;
+                } else {
+                    panel.style.maxHeight = panel.scrollHeight + "px";
+                }
             });
-            paginationContainer.appendChild(button);
-        }
-    }
-
-    async function performSearch(query, page = 1) {
-        searchButton.disabled = true;
-        searchButton.textContent = '검색 중...';
-        resultsContainer.style.display = 'block';
-        resultsList.innerHTML = '<li>검색 중...</li>';
-        
-        const xmlDoc = await fetchOrdinances(query, page);
-
-        if (xmlDoc) {
-            const totalCnt = parseInt(xmlDoc.querySelector('totalCnt')?.textContent || '0', 10);
-            const items = xmlDoc.querySelectorAll('ordin');
-            
-            displayResults(Array.from(items));
-            if(page === 1) setupPagination(totalCnt);
-        } else {
-            resultsList.innerHTML = '<li>검색에 실패했습니다.</li>';
-        }
-
-        searchButton.disabled = false;
-        searchButton.textContent = '검색';
-    }
-    
-    async function performNationwideSearch(keyword, page = 1) {
-        searchButton.disabled = true;
-        searchButton.textContent = '검색 중...';
-        resultsContainer.style.display = 'block';
-        resultsList.innerHTML = '<li>전국 단위 검색 중...</li>';
-
-        const query1 = `도시계획 조례 ${keyword}`;
-        const query2 = `군계획 조례 ${keyword}`;
-
-        // Fetch both queries concurrently
-        const [xmlDoc1, xmlDoc2] = await Promise.all([
-            fetchOrdinances(query1, page),
-            fetchOrdinances(query2, page)
-        ]);
-
-        let allItems = [];
-        let totalCount = 0;
-
-        if (xmlDoc1) {
-            totalCount += parseInt(xmlDoc1.querySelector('totalCnt')?.textContent || '0', 10);
-            allItems.push(...Array.from(xmlDoc1.querySelectorAll('ordin')));
-        }
-        if (xmlDoc2) {
-            totalCount += parseInt(xmlDoc2.querySelector('totalCnt')?.textContent || '0', 10);
-            allItems.push(...Array.from(xmlDoc2.querySelectorAll('ordin')));
-        }
-
-        // Simple sort by promulgation date (descending)
-        allItems.sort((a, b) => {
-            const dateA = a.querySelector('공포일자')?.textContent || '0';
-            const dateB = b.querySelector('공포일자')?.textContent || '0';
-            return dateB.localeCompare(dateA);
         });
-
-        displayResults(allItems);
-        // Note: Pagination for combined results is complex and might not be perfectly accurate 
-        // as we are combining two separate queries. This is a simplified approach.
-        if(page === 1) setupPagination(totalCount);
-
-        searchButton.disabled = false;
-        searchButton.textContent = '검색';
     }
 
-    searchButton.addEventListener('click', () => {
-        const province = provinceSelect.value;
-        const city = citySelect.value;
+    async function runKeywordSearch() {
         const keyword = keywordInput.value.trim();
-
         if (!keyword) {
             alert('검색어를 입력해주세요.');
             return;
         }
 
-        currentPage = 1;
-        
-        if (!province) {
-            // Nationwide search
-            currentQuery = `도시계획 조례 ${keyword}` + `군계획 조례 ${keyword}`; // Store a representation of the query
-            performNationwideSearch(keyword, currentPage);
+        searchButton.disabled = true;
+        searchButton.textContent = '검색 중...';
+        resultsContainer.style.display = 'block';
+        paginationContainer.innerHTML = '';
+        resultsList.innerHTML = '<li>지자체 조례 목록을 가져와 검색을 준비하고 있습니다...</li>';
+
+        let municipalitiesToSearch = [];
+        const selectedProvince = provinceSelect.value;
+        const selectedCity = citySelect.value;
+
+        if (!selectedProvince) {
+            municipalitiesToSearch = Object.values(administrativeDistricts).flat();
+            resultsList.innerHTML = `<li>전국 ${municipalitiesToSearch.length}개 지자체의 조례를 검색 중입니다. 잠시만 기다려주세요...</li>`;
+        } else if (!selectedCity || selectedCity === '전체') {
+            municipalitiesToSearch = administrativeDistricts[selectedProvince];
         } else {
-            // Region-specific search
-            let area = province;
-            if (city) {
-                 area = (province === city || city === '세종특별자치시') ? province : `${province} ${city}`;
-            }
-            const ordinanceType = (city && city.endsWith('군') && city !== '군위군') ? '군계획 조례' : '도시계획 조례';
-            
-            currentQuery = `${area} ${ordinanceType} ${keyword}`;
-            performSearch(currentQuery, currentPage);
+            municipalitiesToSearch = [selectedCity];
         }
-    });
+        
+        try {
+            const allPromises = municipalitiesToSearch.map(city => processMunicipality(city, keyword));
+            const resultsFromAllMunicipalities = await Promise.all(allPromises);
+            const allMatchingArticles = resultsFromAllMunicipalities.flat();
+
+            allMatchingArticles.sort((a, b) => a.municipality.localeCompare(b.municipality));
+
+            displayResults(allMatchingArticles, keyword);
+
+        } catch (error) {
+            console.error('An error occurred during the search:', error);
+            resultsList.innerHTML = '<li>검색 중 오류가 발생했습니다.</li>';
+        }
+
+        searchButton.disabled = false;
+        searchButton.textContent = '검색';
+    }
+
+    searchButton.addEventListener('click', runKeywordSearch);
 });
