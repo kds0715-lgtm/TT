@@ -5,46 +5,122 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>전국 도시/군 계획 조례 검색</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* 디자인 레이아웃 */
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; font-family: 'Malgun Gothic', sans-serif; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #2c3e50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #34495e; }
+        
+        /* 결과창 디자인 */
+        .results-container { margin-top: 30px; border-top: 2px solid #2c3e50; padding-top: 20px; }
+        #results-list { list-style: none; padding: 0; }
+        #results-list li { padding: 15px; border-bottom: 1px solid #eee; transition: background 0.2s; }
+        #results-list li:hover { background: #f9f9f9; }
+        #results-list li a { color: #007bff; text-decoration: none; font-weight: bold; font-size: 1.1em; }
+        .region-tag { display: inline-block; background: #e9ecef; padding: 2px 8px; border-radius: 3px; font-size: 0.85em; margin-right: 10px; color: #666; }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>전국 도시/군 계획 조례 검색</h1>
-            <p>원하는 지역의 도시계획 또는 군계획 조례를 검색합니다.</p>
+            <p>지역별 도시계획 조례를 실시간으로 검색합니다.</p>
         </header>
         <main>
-            <form id="search-form" action="https://www.law.go.kr/search/search.do" method="get" target="_blank">
+            <form id="search-form">
                 <div class="form-group">
                     <label for="province">광역자치단체</label>
                     <select id="province">
-                        <option value="">선택하세요</option>
-                    </select>
+                        <option value="">전체</option>
+                        <option value="서울특별시">서울특별시</option>
+                        <option value="경기도">경기도</option>
+                        <option value="강원특별자치도">강원특별자치도</option>
+                        </select>
                 </div>
                 <div class="form-group">
                     <label for="city">기초자치단체</label>
-                    <select id="city">
-                        <option value="">선택하세요</option>
-                    </select>
+                    <input type="text" id="city" placeholder="예: 수원시, 양양군 (비워두면 전체 검색)">
                 </div>
                 <div class="form-group">
-                    <label for="keyword">검색어</label>
-                    <input type="text" id="keyword" placeholder="예: 발전시설">
+                    <label for="keyword">검색어 (조례명)</label>
+                    <input type="text" id="keyword" placeholder="예: 도시계획, 발전시설">
                 </div>
-                
-                <!-- Hidden inputs for form submission -->
-                <input type="hidden" name="query" id="query-input">
-                <input type="hidden" name="collection" value="ordin">
 
-                <button type="submit" id="search-button">검색</button>
+                <button type="button" id="search-button">조례 검색하기</button>
             </form>
             
             <div id="results-container" class="results-container" style="display: none;">
-                <h2>검색 결과</h2>
+                <h2>검색 결과 <span id="count" style="font-size: 0.6em; color: #666;"></span></h2>
                 <ul id="results-list"></ul>
-                <div id="pagination"></div>
             </div>
         </main>
     </div>
-    <script src="main.js" type="module"></script>
-</body>
-</html>
+
+    <script>
+        // ★ 중요: 국가법령정보센터에서 발급받은 OC 인증키를 아래 따옴표 안에 넣으세요.
+        const API_KEY = 'kds07153202'; 
+
+        document.getElementById('search-button').addEventListener('click', async function() {
+            const province = document.getElementById('province').value;
+            const city = document.getElementById('city').value;
+            const keyword = document.getElementById('keyword').value;
+
+            // 검색어 조합
+            const query = `${province} ${city} ${keyword}`.trim();
+
+            if (!query) {
+                alert("검색어를 입력해주세요.");
+                return;
+            }
+
+            const resultsContainer = document.getElementById('results-container');
+            const resultsList = document.getElementById('results-list');
+            const countSpan = document.getElementById('count');
+
+            // 초기화 및 로딩 표시
+            resultsList.innerHTML = '<li>데이터를 불러오는 중입니다...</li>';
+            resultsContainer.style.display = 'block';
+
+            // 국가법령정보센터 API URL (자치법령 ordin 검색)
+            // 브라우저 직접 요청 시 CORS 에러가 날 수 있으므로, 에러 발생 시 프록시 서버 사용이 필요할 수 있습니다.
+            const url = `https://www.law.go.kr/DRF/lawSearch.do?OC=${API_KEY}&target=ordin&type=XML&query=${encodeURIComponent(query)}`;
+
+            try {
+                const response = await fetch(url);
+                const xmlText = await response.text();
+                
+                // XML 파싱
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                const items = xmlDoc.getElementsByTagName('ordin');
+                const totalCount = xmlDoc.getElementsByTagName('totalCnt')[0]?.textContent || 0;
+
+                resultsList.innerHTML = '';
+                countSpan.innerText = `(총 ${totalCount}건)`;
+
+                if (items.length === 0) {
+                    resultsList.innerHTML = '<li>검색 결과가 없습니다.</li>';
+                    return;
+                }
+
+                for (let i = 0; i < items.length; i++) {
+                    const title = items[i].getElementsByTagName('조례명')[0]?.textContent;
+                    const id = items[i].getElementsByTagName('조례일련번호')[0]?.textContent;
+                    const region = items[i].getElementsByTagName('지자체명')[0]?.textContent;
+                    
+                    // 법령 상세 페이지로 이동하는 링크 생성
+                    const detailUrl = `https://www.law.go.kr/자치법령/${encodeURIComponent(title)}(${id})`;
+                    
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span class="region-tag">${region}</span>
+                        <a href="${detailUrl}" target="_blank">${title}</a>
+                    `;
+                    resultsList.appendChild(li);
+                }
+            } catch (error) {
+                console.error("API 호출 오류:", error);
+                resultsList.innerHTML = '<li>데이터를 가져오는데 실패했습니다. (API 키 확인
